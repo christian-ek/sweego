@@ -1,6 +1,7 @@
 # Sweego Convex Component
 
 [![npm version](https://badge.fury.io/js/@christian-ek%2Fsweego.svg)](https://www.npmjs.com/package/@christian-ek/sweego)
+[![Convex Component](https://www.convex.dev/components/badge/christian-ek/sweego)](https://www.convex.dev/components/christian-ek/sweego)
 
 A [Convex component](https://www.convex.dev/components) for sending
 **transactional email and SMS** through [Sweego](https://www.sweego.io), with
