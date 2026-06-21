@@ -1,0 +1,23 @@
+README.md
+  s_b6c79f799de4b2::t_6ae29a52561a42 235,242
+example/README.md
+  s_b6c79f799de4b2::t_7fc268768f1fe0 73
+example/convex/http.ts
+  s_b6c79f799de4b2::t_03c26ebce85758 9,11
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.9",
+  "base_commit_sha": "9cb608a9557ab984ba795abd6251c0e2db8788c8",
+  "prompts": {},
+  "sessions": {
+    "s_b6c79f799de4b2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ebc9d645-0380-4487-8614-2de91f5e5479",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Christian Ek <hi@christianek.io>"
+    }
+  }
+}
