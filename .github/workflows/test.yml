@@ -1,0 +1,40 @@
+name: Test and lint
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: ["**"]
+
+permissions: {}
+
+jobs:
+  check:
+    name: Test and lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Node setup
+        uses: actions/setup-node@v4
+        with:
+          cache-dependency-path: package.json
+          node-version: "22.x"
+          cache: "npm"
+
+      - name: Install and build
+        run: |
+          npm i
+          npm run build
+      - name: Test
+        run: |
+          npm run test
+          npm run typecheck
+          npm run lint
