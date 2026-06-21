@@ -70,9 +70,11 @@ export default defineSchema({
     .index("by_finalizedAt", ["finalizedAt"])
     .index("by_transactionId", ["transactionId"])
     .index("by_primaryTag", ["primaryTag"])
+    // Composite for the status + tag list filter (paginator has no .filter()).
+    .index("by_status_primaryTag", ["status", "primaryTag"])
     .searchIndex("search_text", {
       searchField: "searchText",
-      filterFields: ["status", "primaryTag"],
+      filterFields: ["status", "primaryTag", "channel"],
     }),
 
   // One row per recipient (per swg_uid returned by Sweego). Webhook events are

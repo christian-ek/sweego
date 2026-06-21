@@ -16,6 +16,7 @@ import {
   mutation,
   query,
 } from "./_generated/server.js";
+import { paginator } from "convex-helpers/server/pagination";
 import schema from "./schema.js";
 import {
   classifyEvent,
@@ -513,18 +514,39 @@ export const list = query({
     paginationOpts: paginationOptsValidator,
     status: v.optional(vSendStatus),
     tag: v.optional(v.string()),
+    channel: v.optional(vChannel),
     // Inclusive creation-time bounds (epoch ms).
     start: v.optional(v.number()),
     end: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    const { status, tag, start, end } = args;
+    const { status, tag, channel, start, end } = args;
+    // `.paginate()` is app-only; components page via the convex-helpers
+    // `paginator` (component-safe). It has no `.filter()`, so status + tag
+    // combine through a composite index, and the coarse `channel` rides a
+    // streamed `filterWith` (a no-op when unset). Date bounds use the implicit
+    // trailing `_creationTime`.
+    const db = paginator(ctx.db, schema);
+    const opts = args.paginationOpts;
+    const matchesChannel = async (d: Doc<"messages">) =>
+      channel === undefined || d.channel === channel;
     let result: PaginationResult<Doc<"messages">>;
-    if (status !== undefined) {
-      // Filter by status (+ optional creation-time range, the implicit trailing
-      // index field). A tag filter, when also set, is applied post-index (rare;
-      // log-scale volume keeps this cheap).
-      let q = ctx.db
+    if (status !== undefined && tag !== undefined) {
+      result = await db
+        .query("messages")
+        .withIndex("by_status_primaryTag", (ix) => {
+          const base = ix.eq("status", status).eq("primaryTag", tag);
+          if (start !== undefined && end !== undefined)
+            return base.gte("_creationTime", start).lte("_creationTime", end);
+          if (start !== undefined) return base.gte("_creationTime", start);
+          if (end !== undefined) return base.lte("_creationTime", end);
+          return base;
+        })
+        .order("desc")
+        .filterWith(matchesChannel)
+        .paginate(opts);
+    } else if (status !== undefined) {
+      result = await db
         .query("messages")
         .withIndex("by_status", (ix) => {
           const base = ix.eq("status", status);
@@ -534,16 +556,11 @@ export const list = query({
           if (end !== undefined) return base.lte("_creationTime", end);
           return base;
         })
-        .order("desc");
-      if (tag !== undefined) {
-        // Secondary filter after the status index (rare: both status + tag set).
-        // Intentional post-index scan; cheap at log-scale message volume.
-        // eslint-disable-next-line @convex-dev/no-filter-in-query
-        q = q.filter((f) => f.eq(f.field("primaryTag"), tag));
-      }
-      result = await q.paginate(args.paginationOpts);
+        .order("desc")
+        .filterWith(matchesChannel)
+        .paginate(opts);
     } else if (tag !== undefined) {
-      result = await ctx.db
+      result = await db
         .query("messages")
         .withIndex("by_primaryTag", (ix) => {
           const base = ix.eq("primaryTag", tag);
@@ -554,9 +571,10 @@ export const list = query({
           return base;
         })
         .order("desc")
-        .paginate(args.paginationOpts);
+        .filterWith(matchesChannel)
+        .paginate(opts);
     } else {
-      result = await ctx.db
+      result = await db
         .query("messages")
         .withIndex("by_creation_time", (ix) => {
           if (start !== undefined && end !== undefined)
@@ -566,7 +584,8 @@ export const list = query({
           return ix;
         })
         .order("desc")
-        .paginate(args.paginationOpts);
+        .filterWith(matchesChannel)
+        .paginate(opts);
     }
     return { ...result, page: result.page.map(messageListItem) };
   },
@@ -581,6 +600,7 @@ export const search = query({
     search: v.string(),
     status: v.optional(vSendStatus),
     tag: v.optional(v.string()),
+    channel: v.optional(vChannel),
     start: v.optional(v.number()),
     end: v.optional(v.number()),
   },
@@ -588,13 +608,14 @@ export const search = query({
   handler: async (ctx, args) => {
     const term = args.search.trim();
     if (term.length === 0) return { page: [] };
-    const { status, tag, start, end } = args;
+    const { status, tag, channel, start, end } = args;
     const rows = await ctx.db
       .query("messages")
       .withSearchIndex("search_text", (q) => {
         let s = q.search("searchText", term);
         if (status !== undefined) s = s.eq("status", status);
         if (tag !== undefined) s = s.eq("primaryTag", tag);
+        if (channel !== undefined) s = s.eq("channel", channel);
         return s;
       })
       .take(SEARCH_RESULT_CAP);

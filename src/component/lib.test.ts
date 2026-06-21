@@ -288,4 +288,51 @@ describe("list / search / bounds", () => {
     const after = await t.query(api.lib.bounds, {});
     expect(after.earliest).not.toBeNull();
   });
+
+  it("filters by status and tag together (composite index)", async () => {
+    const t = setup();
+    await seedMessage(t, "ok-invite", { status: "sent", tag: "invitation" });
+    await seedMessage(t, "bad-invite", { status: "failed", tag: "invitation" });
+    await seedMessage(t, "bad-reset", {
+      status: "failed",
+      tag: "resetPassword",
+    });
+    const r = await t.query(api.lib.list, {
+      paginationOpts: { numItems: 50, cursor: null },
+      status: "failed",
+      tag: "invitation",
+    });
+    expect(r.page.length).toBe(1);
+    expect(r.page[0].subject).toBe("bad-invite");
+  });
+
+  it("filters by channel (email vs sms)", async () => {
+    const t = setup();
+    await seedMessage(t, "an email");
+    await t.run(async (ctx) =>
+      ctx.db.insert("messages", {
+        channel: "sms",
+        provider: "sweego",
+        status: "sent",
+        bulk: false,
+        smsRecipients: [{ num: "+33123456789", region: "FR" }],
+        finalizedAt: Date.now(),
+        searchText: "+33123456789",
+      }),
+    );
+    const emails = await t.query(api.lib.list, {
+      paginationOpts: { numItems: 50, cursor: null },
+      channel: "email",
+    });
+    expect(emails.page.length).toBe(1);
+    expect(emails.page[0].channel).toBe("email");
+
+    const sms = await t.query(api.lib.list, {
+      paginationOpts: { numItems: 50, cursor: null },
+      channel: "sms",
+    });
+    expect(sms.page.length).toBe(1);
+    expect(sms.page[0].channel).toBe("sms");
+    expect(sms.page[0].recipientCount).toBe(1);
+  });
 });

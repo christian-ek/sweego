@@ -246,6 +246,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         "query",
         "internal",
         {
+          channel?: "email" | "sms";
           end?: number;
           paginationOpts: {
             cursor: string | null;
@@ -273,6 +274,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         "query",
         "internal",
         {
+          channel?: "email" | "sms";
           end?: number;
           search: string;
           start?: number;

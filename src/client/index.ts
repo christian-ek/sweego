@@ -12,6 +12,7 @@ import type { ComponentApi } from "../component/_generated/component.js";
 import {
   type ActionCtx,
   type Attachment,
+  type Channel,
   DEFAULT_PROVIDER,
   type EmailAddress,
   type ListUnsub,
@@ -375,6 +376,7 @@ export class Sweego {
       paginationOpts: PaginationOptions;
       status?: SendStatus;
       tag?: string;
+      channel?: Channel;
       start?: number;
       end?: number;
     },
@@ -383,6 +385,7 @@ export class Sweego {
       paginationOpts: args.paginationOpts,
       status: args.status,
       tag: args.tag,
+      channel: args.channel,
       start: args.start,
       end: args.end,
     });
@@ -398,6 +401,7 @@ export class Sweego {
       search: string;
       status?: SendStatus;
       tag?: string;
+      channel?: Channel;
       start?: number;
       end?: number;
     },
@@ -406,6 +410,7 @@ export class Sweego {
       search: args.search,
       status: args.status,
       tag: args.tag,
+      channel: args.channel,
       start: args.start,
       end: args.end,
     });
