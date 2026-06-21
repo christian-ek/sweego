@@ -233,6 +233,30 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         null,
         Name
       >;
+      list: FunctionReference<
+        "query",
+        "internal",
+        {
+          before?: number;
+          limit?: number;
+          status?: "queued" | "sent" | "failed" | "cancelled";
+        },
+        {
+          nextCursor: number | null;
+          page: Array<{
+            campaignTags: Array<string>;
+            channel: "email" | "sms";
+            createdAt: number;
+            errorMessage: string | null;
+            messageId: string;
+            recipientCount: number;
+            status: "queued" | "sent" | "failed" | "cancelled";
+            subject: string | null;
+            transactionId: string | null;
+          }>;
+        },
+        Name
+      >;
       refreshStatus: FunctionReference<
         "action",
         "internal",

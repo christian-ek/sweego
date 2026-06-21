@@ -20,6 +20,7 @@ import {
   parseEmailAddresses,
   type QueryCtx,
   type RuntimeConfig,
+  type SendStatus,
   type SmsCampaignType,
   type SmsRecipient,
   type SweegoEvent,
@@ -359,6 +360,21 @@ export class Sweego {
   /** The full stored message plus its deliveries. */
   async get(ctx: QueryCtx | MutationCtx | ActionCtx, messageId: MessageId) {
     return ctx.runQuery(this.component.lib.get, { messageId });
+  }
+
+  /**
+   * Paginated list of recent messages (newest first) — for admin / audit views.
+   * Pass the previous result's `nextCursor` as `before` to page through.
+   */
+  async list(
+    ctx: QueryCtx | MutationCtx | ActionCtx,
+    options?: { limit?: number; before?: number; status?: SendStatus },
+  ) {
+    return ctx.runQuery(this.component.lib.list, {
+      limit: options?.limit,
+      before: options?.before,
+      status: options?.status,
+    });
   }
 
   /**

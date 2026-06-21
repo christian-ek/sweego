@@ -462,6 +462,74 @@ export const get = query({
   },
 });
 
+// A lightweight, paginated list of recent messages (newest first) for admin /
+// audit views. Drill into getStatus/get for per-recipient delivery detail.
+const vMessageListItem = v.object({
+  messageId: v.id("messages"),
+  channel: vChannel,
+  status: vSendStatus,
+  subject: v.union(v.string(), v.null()),
+  recipientCount: v.number(),
+  transactionId: v.union(v.string(), v.null()),
+  errorMessage: v.union(v.string(), v.null()),
+  campaignTags: v.array(v.string()),
+  createdAt: v.number(),
+});
+
+function messageListItem(m: Doc<"messages">) {
+  return {
+    messageId: m._id,
+    channel: m.channel,
+    status: m.status,
+    subject: m.subject ?? null,
+    recipientCount: m.emailRecipients?.length ?? m.smsRecipients?.length ?? 0,
+    transactionId: m.transactionId ?? null,
+    errorMessage: m.errorMessage ?? null,
+    campaignTags: m.campaignTags ?? [],
+    createdAt: m._creationTime,
+  };
+}
+
+export const list = query({
+  args: {
+    limit: v.optional(v.number()),
+    // Cursor: pass the previous page's `nextCursor` to get the next page.
+    before: v.optional(v.number()),
+    status: v.optional(vSendStatus),
+  },
+  returns: v.object({
+    page: v.array(vMessageListItem),
+    nextCursor: v.union(v.number(), v.null()),
+  }),
+  handler: async (ctx, args) => {
+    const limit = Math.min(Math.max(args.limit ?? 50, 1), 200);
+    const { before, status } = args;
+    const rows = status
+      ? await ctx.db
+          .query("messages")
+          .withIndex("by_status", (q) =>
+            before
+              ? q.eq("status", status).lt("_creationTime", before)
+              : q.eq("status", status),
+          )
+          .order("desc")
+          .take(limit + 1)
+      : await ctx.db
+          .query("messages")
+          .withIndex("by_creation_time", (q) =>
+            before ? q.lt("_creationTime", before) : q,
+          )
+          .order("desc")
+          .take(limit + 1);
+    const page = rows.slice(0, limit).map(messageListItem);
+    const nextCursor =
+      rows.length > limit && page.length > 0
+        ? page[page.length - 1].createdAt
+        : null;
+    return { page, nextCursor };
+  },
+});
+
 /* -------------------------------------------------------------------------- */
 /*  Webhook event handling                                                    */
 /* -------------------------------------------------------------------------- */

@@ -187,3 +187,54 @@ describe("handleEvent state machine", () => {
     expect(events.length).toBe(1);
   });
 });
+
+describe("list", () => {
+  async function seedMessage(
+    t: ReturnType<typeof setup>,
+    subject: string,
+    status: "sent" | "failed" = "sent",
+  ) {
+    return t.run(async (ctx) =>
+      ctx.db.insert("messages", {
+        channel: "email",
+        provider: "sweego",
+        status,
+        bulk: false,
+        subject,
+        emailRecipients: [{ email: "u@x.com" }],
+        finalizedAt: Date.now(),
+      }),
+    );
+  }
+
+  it("returns messages newest-first with cursor pagination", async () => {
+    const t = setup();
+    await seedMessage(t, "s0");
+    await seedMessage(t, "s1");
+    await seedMessage(t, "s2");
+
+    const first = await t.query(api.lib.list, { limit: 2 });
+    expect(first.page.length).toBe(2);
+    expect(first.nextCursor).not.toBeNull();
+    expect(first.page[0].subject).toBe("s2"); // newest first
+    expect(first.page[0].recipientCount).toBe(1);
+
+    const second = await t.query(api.lib.list, {
+      limit: 2,
+      before: first.nextCursor ?? undefined,
+    });
+    expect(second.page.length).toBe(1);
+    expect(second.page[0].subject).toBe("s0");
+    expect(second.nextCursor).toBeNull();
+  });
+
+  it("filters by status", async () => {
+    const t = setup();
+    await seedMessage(t, "ok", "sent");
+    await seedMessage(t, "bad", "failed");
+    const r = await t.query(api.lib.list, { status: "failed" });
+    expect(r.page.length).toBe(1);
+    expect(r.page[0].subject).toBe("bad");
+    expect(r.page[0].status).toBe("failed");
+  });
+});
