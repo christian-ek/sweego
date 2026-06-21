@@ -1,0 +1,22 @@
+.github/workflows/release.yml
+  s_b6c79f799de4b2::t_d336468eeafb8d 1-47
+package.json
+  s_b6c79f799de4b2::t_cb4edc71045836 44-46
+  s_b6c79f799de4b2::t_50c0a2218669e2 27
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.9",
+  "base_commit_sha": "ff7876089be1afbc1e83ae0d7006aaa074915a87",
+  "prompts": {},
+  "sessions": {
+    "s_b6c79f799de4b2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ebc9d645-0380-4487-8614-2de91f5e5479",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Christian Ek <hi@christianek.io>"
+    }
+  }
+}
