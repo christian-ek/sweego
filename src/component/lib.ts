@@ -748,6 +748,10 @@ export const refreshStatus = action({
 
 /* -------------------------------------------------------------------------- */
 /*  Cleanup (retention)                                                       */
+/*                                                                            */
+/*  These mutations are intentionally PUBLIC so the host app can schedule     */
+/*  them from its own crons (e.g. components.sweego.lib.cleanupOldMessages).   */
+/*  See the "Data retention" section of the README for the cron setup.        */
 /* -------------------------------------------------------------------------- */
 
 async function deleteMessageCascade(ctx: MutationCtx, message: Doc<"messages">) {
