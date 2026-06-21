@@ -1,0 +1,47 @@
+name: Release
+
+# Publishes to npm when you publish a GitHub Release.
+# Flow: bump the version + push the tag, then create a GitHub Release for that
+# tag — this workflow builds and publishes that version to npm.
+#   npm version patch        # bumps package.json, commits, creates vX.Y.Z tag
+#   git push --follow-tags
+#   gh release create vX.Y.Z --generate-notes
+#
+# Requires a repo secret NPM_TOKEN (an npm "Automation" access token).
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: Publish to npm
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Node setup
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22.x"
+          registry-url: "https://registry.npmjs.org"
+          cache: "npm"
+          cache-dependency-path: package.json
+
+      - name: Install, build, test
+        run: |
+          npm i
+          npm run build
+          npm run test
+          npm run lint
+
+      - name: Publish
+        run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
