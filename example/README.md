@@ -70,5 +70,5 @@ You can supply the Sweego API key two ways:
 ## Webhook
 
 Create a webhook in the Sweego dashboard pointing at
-`https://<your-deployment>.convex.site/sweego-webhook`, then put its signing
+`https://<your-deployment>.convex.site/webhooks/sweego`, then put its signing
 secret in `SWEEGO_WEBHOOK_SECRET`.

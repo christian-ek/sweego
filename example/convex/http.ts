@@ -6,9 +6,9 @@ const http = httpRouter();
 
 // Sweego will POST delivery events here. The component verifies the HMAC
 // signature before processing. With deployment happy-leopard-123 this is:
-//   https://happy-leopard-123.convex.site/sweego-webhook
+//   https://happy-leopard-123.convex.site/webhooks/sweego
 http.route({
-  path: "/sweego-webhook",
+  path: "/webhooks/sweego",
   method: "POST",
   handler: httpAction(async (ctx, req) => {
     return await sweego.handleSweegoWebhook(ctx, req);

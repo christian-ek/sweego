@@ -232,14 +232,14 @@ or clicked — for that, set up a webhook.
 
    const http = httpRouter();
    http.route({
-     path: "/sweego-webhook",
+     path: "/webhooks/sweego",
      method: "POST",
      handler: httpAction(async (ctx, req) => sweego.handleSweegoWebhook(ctx, req)),
    });
    export default http;
    ```
 
-   Your endpoint is then `https://<your-deployment>.convex.site/sweego-webhook`.
+   Your endpoint is then `https://<your-deployment>.convex.site/webhooks/sweego`.
 
 2. In the Sweego dashboard, create a webhook pointing at that URL and select the
    email/SMS events you care about.
