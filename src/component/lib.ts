@@ -519,6 +519,21 @@ export const list = query({
     start: v.optional(v.number()),
     end: v.optional(v.number()),
   },
+  // Typed PaginationResult so the page shape flows to consumers (no `any`
+  // across the component boundary). Compatible with `usePaginatedQuery`.
+  returns: v.object({
+    page: v.array(vMessageListItem),
+    isDone: v.boolean(),
+    continueCursor: v.string(),
+    splitCursor: v.optional(v.union(v.string(), v.null())),
+    pageStatus: v.optional(
+      v.union(
+        v.literal("SplitRecommended"),
+        v.literal("SplitRequired"),
+        v.null()
+      )
+    ),
+  }),
   handler: async (ctx, args) => {
     const { status, tag, channel, start, end } = args;
     // `.paginate()` is app-only; components page via the convex-helpers

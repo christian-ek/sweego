@@ -260,7 +260,23 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           status?: "queued" | "sent" | "failed" | "cancelled";
           tag?: string;
         },
-        any,
+        {
+          continueCursor: string;
+          isDone: boolean;
+          page: Array<{
+            campaignTags: Array<string>;
+            channel: "email" | "sms";
+            createdAt: number;
+            errorMessage: string | null;
+            messageId: string;
+            recipientCount: number;
+            status: "queued" | "sent" | "failed" | "cancelled";
+            subject: string | null;
+            transactionId: string | null;
+          }>;
+          pageStatus?: "SplitRecommended" | "SplitRequired" | null;
+          splitCursor?: string | null;
+        },
         Name
       >;
       refreshStatus: FunctionReference<
