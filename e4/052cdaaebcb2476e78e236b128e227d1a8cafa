@@ -1,0 +1,21 @@
+src/component/lib.ts
+  s_b6c79f799de4b2::t_37a500991ec73a 522-536
+src/component/_generated/component.ts
+  s_b6c79f799de4b2::t_b4d5d8bc35c10a 263-279
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.9",
+  "base_commit_sha": "e4052cdaaebcb2476e78e236b128e227d1a8cafa",
+  "prompts": {},
+  "sessions": {
+    "s_b6c79f799de4b2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ebc9d645-0380-4487-8614-2de91f5e5479",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Christian Ek <hi@christianek.io>"
+    }
+  }
+}
