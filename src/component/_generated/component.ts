@@ -24,6 +24,13 @@ import type { FunctionReference } from "convex/server";
 export type ComponentApi<Name extends string | undefined = string | undefined> =
   {
     lib: {
+      bounds: FunctionReference<
+        "query",
+        "internal",
+        {},
+        { earliest: number | null },
+        Name
+      >;
       cancel: FunctionReference<
         "mutation",
         "internal",
@@ -175,8 +182,10 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           headers?: Record<string, string>;
           html?: string;
           listUnsub?: { method?: "mailto" | "one-click"; value: string };
+          primaryTag?: string;
           provider: string;
           replyTo?: { email: string; name?: string };
+          searchText?: string;
           senderId?: string;
           shortenUrls?: boolean;
           shortenWithProtocol?: boolean;
@@ -237,12 +246,40 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         "query",
         "internal",
         {
-          before?: number;
-          limit?: number;
+          end?: number;
+          paginationOpts: {
+            cursor: string | null;
+            endCursor?: string | null;
+            id?: number;
+            maximumBytesRead?: number;
+            maximumRowsRead?: number;
+            numItems: number;
+          };
+          start?: number;
           status?: "queued" | "sent" | "failed" | "cancelled";
+          tag?: string;
+        },
+        any,
+        Name
+      >;
+      refreshStatus: FunctionReference<
+        "action",
+        "internal",
+        { apiKey: string; messageId: string },
+        number,
+        Name
+      >;
+      search: FunctionReference<
+        "query",
+        "internal",
+        {
+          end?: number;
+          search: string;
+          start?: number;
+          status?: "queued" | "sent" | "failed" | "cancelled";
+          tag?: string;
         },
         {
-          nextCursor: number | null;
           page: Array<{
             campaignTags: Array<string>;
             channel: "email" | "sms";
@@ -255,13 +292,6 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
             transactionId: string | null;
           }>;
         },
-        Name
-      >;
-      refreshStatus: FunctionReference<
-        "action",
-        "internal",
-        { apiKey: string; messageId: string },
-        number,
         Name
       >;
     };

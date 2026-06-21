@@ -1,5 +1,9 @@
 import { Workpool } from "@convex-dev/workpool";
-import type { FunctionHandle } from "convex/server";
+import {
+  type FunctionHandle,
+  type PaginationResult,
+  paginationOptsValidator,
+} from "convex/server";
 import { v } from "convex/values";
 import { api, components, internal } from "./_generated/api.js";
 import type { Doc, Id } from "./_generated/dataModel.js";
@@ -44,6 +48,7 @@ const FINALIZED_EPOCH = Number.MAX_SAFE_INTEGER;
 const FINALIZED_RETENTION_MS = 1000 * 60 * 60 * 24 * 7; // 7 days
 const ABANDONED_RETENTION_MS = 1000 * 60 * 60 * 24 * 30; // 30 days
 const EVENT_RETENTION_MS = 1000 * 60 * 60 * 24 * 7; // 7 days
+const SEARCH_RESULT_CAP = 50; // relevance-ranked search results returned
 const CLEANUP_BATCH = 100;
 // Upper bound on per-message deliveries read into a status view / polled, to
 // keep reads bounded for very large bulk sends.
@@ -182,6 +187,17 @@ export const enqueueMessage = mutation({
       }
     }
 
+    // Denormalized fields for admin list/search (see schema): a lowercased
+    // subject + recipients blob, and the first campaign tag.
+    const recipientText =
+      message.channel === "email"
+        ? (message.emailRecipients ?? []).map((r) => r.email).join(" ")
+        : (message.smsRecipients ?? []).map((r) => r.num).join(" ");
+    const searchText = [message.subject, recipientText]
+      .filter((s): s is string => typeof s === "string" && s.length > 0)
+      .join(" ")
+      .toLowerCase();
+
     const messageId = await ctx.db.insert("messages", {
       ...message,
       // Normalize empty body fields to absent so they aren't sent to Sweego.
@@ -191,6 +207,8 @@ export const enqueueMessage = mutation({
       provider: options.provider,
       status: "queued",
       finalizedAt: FINALIZED_EPOCH,
+      searchText: searchText.length > 0 ? searchText : undefined,
+      primaryTag: message.campaignTags?.[0],
     });
 
     // Remember the latest event callback so the webhook handler can dispatch it.
@@ -492,41 +510,115 @@ function messageListItem(m: Doc<"messages">) {
 
 export const list = query({
   args: {
-    limit: v.optional(v.number()),
-    // Cursor: pass the previous page's `nextCursor` to get the next page.
-    before: v.optional(v.number()),
+    paginationOpts: paginationOptsValidator,
     status: v.optional(vSendStatus),
+    tag: v.optional(v.string()),
+    // Inclusive creation-time bounds (epoch ms).
+    start: v.optional(v.number()),
+    end: v.optional(v.number()),
   },
-  returns: v.object({
-    page: v.array(vMessageListItem),
-    nextCursor: v.union(v.number(), v.null()),
-  }),
   handler: async (ctx, args) => {
-    const limit = Math.min(Math.max(args.limit ?? 50, 1), 200);
-    const { before, status } = args;
-    const rows = status
-      ? await ctx.db
-          .query("messages")
-          .withIndex("by_status", (q) =>
-            before
-              ? q.eq("status", status).lt("_creationTime", before)
-              : q.eq("status", status),
-          )
-          .order("desc")
-          .take(limit + 1)
-      : await ctx.db
-          .query("messages")
-          .withIndex("by_creation_time", (q) =>
-            before ? q.lt("_creationTime", before) : q,
-          )
-          .order("desc")
-          .take(limit + 1);
-    const page = rows.slice(0, limit).map(messageListItem);
-    const nextCursor =
-      rows.length > limit && page.length > 0
-        ? page[page.length - 1].createdAt
-        : null;
-    return { page, nextCursor };
+    const { status, tag, start, end } = args;
+    let result: PaginationResult<Doc<"messages">>;
+    if (status !== undefined) {
+      // Filter by status (+ optional creation-time range, the implicit trailing
+      // index field). A tag filter, when also set, is applied post-index (rare;
+      // log-scale volume keeps this cheap).
+      let q = ctx.db
+        .query("messages")
+        .withIndex("by_status", (ix) => {
+          const base = ix.eq("status", status);
+          if (start !== undefined && end !== undefined)
+            return base.gte("_creationTime", start).lte("_creationTime", end);
+          if (start !== undefined) return base.gte("_creationTime", start);
+          if (end !== undefined) return base.lte("_creationTime", end);
+          return base;
+        })
+        .order("desc");
+      if (tag !== undefined) {
+        // Secondary filter after the status index (rare: both status + tag set).
+        // Intentional post-index scan; cheap at log-scale message volume.
+        // eslint-disable-next-line @convex-dev/no-filter-in-query
+        q = q.filter((f) => f.eq(f.field("primaryTag"), tag));
+      }
+      result = await q.paginate(args.paginationOpts);
+    } else if (tag !== undefined) {
+      result = await ctx.db
+        .query("messages")
+        .withIndex("by_primaryTag", (ix) => {
+          const base = ix.eq("primaryTag", tag);
+          if (start !== undefined && end !== undefined)
+            return base.gte("_creationTime", start).lte("_creationTime", end);
+          if (start !== undefined) return base.gte("_creationTime", start);
+          if (end !== undefined) return base.lte("_creationTime", end);
+          return base;
+        })
+        .order("desc")
+        .paginate(args.paginationOpts);
+    } else {
+      result = await ctx.db
+        .query("messages")
+        .withIndex("by_creation_time", (ix) => {
+          if (start !== undefined && end !== undefined)
+            return ix.gte("_creationTime", start).lte("_creationTime", end);
+          if (start !== undefined) return ix.gte("_creationTime", start);
+          if (end !== undefined) return ix.lte("_creationTime", end);
+          return ix;
+        })
+        .order("desc")
+        .paginate(args.paginationOpts);
+    }
+    return { ...result, page: result.page.map(messageListItem) };
+  },
+});
+
+// Full-text search over subject + recipients (relevance-ranked, capped, NOT
+// paginated — search indexes are not orderable). status/tag constrain via the
+// index filter fields; the creation-time range is applied in memory over the
+// capped result set (so a date-filtered search may return fewer than the cap).
+export const search = query({
+  args: {
+    search: v.string(),
+    status: v.optional(vSendStatus),
+    tag: v.optional(v.string()),
+    start: v.optional(v.number()),
+    end: v.optional(v.number()),
+  },
+  returns: v.object({ page: v.array(vMessageListItem) }),
+  handler: async (ctx, args) => {
+    const term = args.search.trim();
+    if (term.length === 0) return { page: [] };
+    const { status, tag, start, end } = args;
+    const rows = await ctx.db
+      .query("messages")
+      .withSearchIndex("search_text", (q) => {
+        let s = q.search("searchText", term);
+        if (status !== undefined) s = s.eq("status", status);
+        if (tag !== undefined) s = s.eq("primaryTag", tag);
+        return s;
+      })
+      .take(SEARCH_RESULT_CAP);
+    const inRange = rows.filter(
+      (r) =>
+        (start === undefined || r._creationTime >= start) &&
+        (end === undefined || r._creationTime <= end),
+    );
+    return { page: inRange.map(messageListItem) };
+  },
+});
+
+// Earliest message creation time (for a date-range picker default), or null
+// when no messages exist yet.
+export const bounds = query({
+  args: {},
+  returns: v.object({ earliest: v.union(v.number(), v.null()) }),
+  handler: async (ctx) => {
+    const first = await ctx.db
+      .query("messages")
+      .withIndex("by_creation_time")
+      .order("asc")
+      .first();
+    return { earliest: first?._creationTime ?? null };
   },
 });
 

@@ -59,10 +59,21 @@ export default defineSchema({
     errorMessage: v.optional(v.string()),
     creditLeft: v.optional(v.string()),
     finalizedAt: v.number(),
+
+    // Denormalized for admin list/search (populated on enqueue): `searchText`
+    // is a lowercased subject + recipients blob; `primaryTag` is the first
+    // campaignTag (filter by campaign / message type).
+    searchText: v.optional(v.string()),
+    primaryTag: v.optional(v.string()),
   })
     .index("by_status", ["status"])
     .index("by_finalizedAt", ["finalizedAt"])
-    .index("by_transactionId", ["transactionId"]),
+    .index("by_transactionId", ["transactionId"])
+    .index("by_primaryTag", ["primaryTag"])
+    .searchIndex("search_text", {
+      searchField: "searchText",
+      filterFields: ["status", "primaryTag"],
+    }),
 
   // One row per recipient (per swg_uid returned by Sweego). Webhook events are
   // matched to a delivery via `swgUid`.

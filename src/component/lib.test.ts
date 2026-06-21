@@ -188,12 +188,17 @@ describe("handleEvent state machine", () => {
   });
 });
 
-describe("list", () => {
+describe("list / search / bounds", () => {
   async function seedMessage(
     t: ReturnType<typeof setup>,
     subject: string,
-    status: "sent" | "failed" = "sent",
+    opts: {
+      status?: "queued" | "sent" | "failed" | "cancelled";
+      tag?: string;
+      email?: string;
+    } = {},
   ) {
+    const { status = "sent", tag, email = "u@x.com" } = opts;
     return t.run(async (ctx) =>
       ctx.db.insert("messages", {
         channel: "email",
@@ -201,40 +206,86 @@ describe("list", () => {
         status,
         bulk: false,
         subject,
-        emailRecipients: [{ email: "u@x.com" }],
+        emailRecipients: [{ email }],
         finalizedAt: Date.now(),
+        searchText: `${subject} ${email}`.toLowerCase(),
+        primaryTag: tag,
+        campaignTags: tag ? [tag] : undefined,
       }),
     );
   }
 
-  it("returns messages newest-first with cursor pagination", async () => {
+  it("paginates newest-first", async () => {
     const t = setup();
     await seedMessage(t, "s0");
     await seedMessage(t, "s1");
     await seedMessage(t, "s2");
 
-    const first = await t.query(api.lib.list, { limit: 2 });
+    const first = await t.query(api.lib.list, {
+      paginationOpts: { numItems: 2, cursor: null },
+    });
     expect(first.page.length).toBe(2);
-    expect(first.nextCursor).not.toBeNull();
+    expect(first.isDone).toBe(false);
     expect(first.page[0].subject).toBe("s2"); // newest first
     expect(first.page[0].recipientCount).toBe(1);
 
     const second = await t.query(api.lib.list, {
-      limit: 2,
-      before: first.nextCursor ?? undefined,
+      paginationOpts: { numItems: 2, cursor: first.continueCursor },
     });
     expect(second.page.length).toBe(1);
     expect(second.page[0].subject).toBe("s0");
-    expect(second.nextCursor).toBeNull();
+    expect(second.isDone).toBe(true);
   });
 
   it("filters by status", async () => {
     const t = setup();
-    await seedMessage(t, "ok", "sent");
-    await seedMessage(t, "bad", "failed");
-    const r = await t.query(api.lib.list, { status: "failed" });
+    await seedMessage(t, "ok", { status: "sent" });
+    await seedMessage(t, "bad", { status: "failed" });
+    const r = await t.query(api.lib.list, {
+      paginationOpts: { numItems: 50, cursor: null },
+      status: "failed",
+    });
     expect(r.page.length).toBe(1);
     expect(r.page[0].subject).toBe("bad");
     expect(r.page[0].status).toBe("failed");
+  });
+
+  it("filters by primary tag", async () => {
+    const t = setup();
+    await seedMessage(t, "invite", { tag: "invitation" });
+    await seedMessage(t, "reset", { tag: "resetPassword" });
+    const r = await t.query(api.lib.list, {
+      paginationOpts: { numItems: 50, cursor: null },
+      tag: "invitation",
+    });
+    expect(r.page.length).toBe(1);
+    expect(r.page[0].subject).toBe("invite");
+    expect(r.page[0].campaignTags).toEqual(["invitation"]);
+  });
+
+  it("searches subject + recipients", async () => {
+    const t = setup();
+    await seedMessage(t, "Welcome aboard", { email: "alice@acme.com" });
+    await seedMessage(t, "Reset link", { email: "bob@acme.com" });
+
+    const bySubject = await t.query(api.lib.search, { search: "welcome" });
+    expect(bySubject.page.length).toBe(1);
+    expect(bySubject.page[0].subject).toBe("Welcome aboard");
+
+    const byRecipient = await t.query(api.lib.search, { search: "bob" });
+    expect(byRecipient.page.length).toBe(1);
+    expect(byRecipient.page[0].subject).toBe("Reset link");
+
+    const empty = await t.query(api.lib.search, { search: "  " });
+    expect(empty.page.length).toBe(0);
+  });
+
+  it("reports the earliest creation time", async () => {
+    const t = setup();
+    const before = await t.query(api.lib.bounds, {});
+    expect(before.earliest).toBeNull();
+    await seedMessage(t, "first");
+    const after = await t.query(api.lib.bounds, {});
+    expect(after.earliest).not.toBeNull();
   });
 });

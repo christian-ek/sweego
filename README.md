@@ -189,6 +189,35 @@ const cancelled = await sweego.cancel(ctx, messageId); // true if not yet sent
 A message produces one **delivery** per recipient (Sweego returns one `swg_uid`
 per recipient), each tracked independently.
 
+## Listing & searching (admin views)
+
+For an admin "all emails sent" view, the component can query its own message
+log (newest first), so you don't have to mirror sends into your own table:
+
+```ts
+// Paginated — use with Convex's `usePaginatedQuery`. Optional filters: send
+// status, primary campaign tag, and an inclusive creation-time range (ms).
+const result = await sweego.list(ctx, {
+  paginationOpts, // { numItems, cursor }
+  status: "sent", // optional
+  tag: "invitation", // optional — matches the first campaignTag
+  start,
+  end, // optional — creation-time bounds
+});
+// result.page: [{ messageId, channel, status, subject, recipientCount,
+//                 campaignTags, transactionId, errorMessage, createdAt }]
+
+// Full-text search over subject + recipients (relevance-ranked, capped at 50,
+// not paginated). Same status / tag / date filters as `list`.
+const hits = await sweego.search(ctx, { search: "welcome", status: "sent" });
+
+// Earliest message time (for a date-range picker default), or null.
+const { earliest } = await sweego.bounds(ctx);
+```
+
+Tag your sends (`campaignTags`) to group them in the log — the `tag` filter
+matches the first tag (e.g. by template or campaign).
+
 ## Webhooks (delivery events)
 
 Sending alone won't tell you whether a message was delivered, bounced, opened,

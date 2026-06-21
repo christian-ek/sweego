@@ -5,6 +5,7 @@ import {
   type GenericDataModel,
   type GenericMutationCtx,
   internalMutationGeneric,
+  type PaginationOptions,
 } from "convex/server";
 import { type VString, v } from "convex/values";
 import type { ComponentApi } from "../component/_generated/component.js";
@@ -363,18 +364,59 @@ export class Sweego {
   }
 
   /**
-   * Paginated list of recent messages (newest first) — for admin / audit views.
-   * Pass the previous result's `nextCursor` as `before` to page through.
+   * Paginated list of recent messages (newest first) for admin / audit views.
+   * Use with Convex's `usePaginatedQuery` (pass its `paginationOpts`); optionally
+   * filter by send status, primary campaign tag, and an inclusive creation-time
+   * range. Drill into {@link get} / {@link status} for per-recipient detail.
    */
   async list(
     ctx: QueryCtx | MutationCtx | ActionCtx,
-    options?: { limit?: number; before?: number; status?: SendStatus },
+    args: {
+      paginationOpts: PaginationOptions;
+      status?: SendStatus;
+      tag?: string;
+      start?: number;
+      end?: number;
+    },
   ) {
     return ctx.runQuery(this.component.lib.list, {
-      limit: options?.limit,
-      before: options?.before,
-      status: options?.status,
+      paginationOpts: args.paginationOpts,
+      status: args.status,
+      tag: args.tag,
+      start: args.start,
+      end: args.end,
     });
+  }
+
+  /**
+   * Full-text search over subject + recipients (relevance-ranked, capped at 50,
+   * not paginated). Same status / tag / creation-time filters as {@link list}.
+   */
+  async search(
+    ctx: QueryCtx | MutationCtx | ActionCtx,
+    args: {
+      search: string;
+      status?: SendStatus;
+      tag?: string;
+      start?: number;
+      end?: number;
+    },
+  ) {
+    return ctx.runQuery(this.component.lib.search, {
+      search: args.search,
+      status: args.status,
+      tag: args.tag,
+      start: args.start,
+      end: args.end,
+    });
+  }
+
+  /**
+   * Earliest message creation time (epoch ms), or null when none exist — handy
+   * as the default lower bound for a date-range filter over {@link list}.
+   */
+  async bounds(ctx: QueryCtx | MutationCtx | ActionCtx) {
+    return ctx.runQuery(this.component.lib.bounds, {});
   }
 
   /**
