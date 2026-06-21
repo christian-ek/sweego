@@ -1,0 +1,6 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "npm run build && npx convex deploy --cmd-url-env-var-name VITE_CONVEX_URL --cmd 'npm run build:frontend'",
+  "outputDirectory": "example/dist",
+  "framework": null
+}
