@@ -336,3 +336,81 @@ describe("list / search / bounds", () => {
     expect(sms.page[0].recipientCount).toBe(1);
   });
 });
+
+describe("purgeRecipient (GDPR erasure)", () => {
+  // Seed a sent message to `email` with one delivery and one webhook event, so a
+  // purge has the full message -> deliveries -> events cascade to remove.
+  async function seedWithDelivery(
+    t: ReturnType<typeof setup>,
+    email: string,
+    subject: string,
+  ) {
+    return t.run(async (ctx) => {
+      const messageId = await ctx.db.insert("messages", {
+        channel: "email",
+        provider: "sweego",
+        status: "sent",
+        bulk: false,
+        subject,
+        emailRecipients: [{ email }],
+        finalizedAt: Date.now(),
+        searchText: `${subject} ${email}`.toLowerCase(),
+      });
+      const deliveryId = await ctx.db.insert("deliveries", {
+        messageId,
+        swgUid: `swg-${subject}`,
+        recipientKey: email,
+        channel: "email",
+        status: "sent",
+        delivered: false,
+        bounced: false,
+        softBounced: false,
+        complained: false,
+        unsubscribed: false,
+        opened: false,
+        clicked: false,
+        stopped: false,
+        finalizedAt: Date.now(),
+      });
+      await ctx.db.insert("events", {
+        swgUid: `swg-${subject}`,
+        messageId,
+        deliveryId,
+        channel: "email",
+        eventType: "delivered",
+        payload: {},
+        createdAt: Date.now(),
+      });
+      return messageId;
+    });
+  }
+
+  it("deletes a recipient's messages, deliveries and events (case-insensitive)", async () => {
+    const t = setup();
+    await seedWithDelivery(t, "alice@x.com", "to-alice-1");
+    await seedWithDelivery(t, "alice@x.com", "to-alice-2");
+    const bobId = await seedWithDelivery(t, "bob@x.com", "to-bob");
+
+    // Uppercased input must still match the stored lowercase recipient.
+    await t.mutation(api.lib.purgeRecipient, { email: "ALICE@X.COM" });
+
+    await t.run(async (ctx) => {
+      const messages = await ctx.db.query("messages").collect();
+      expect(messages).toHaveLength(1);
+      expect(messages[0]._id).toBe(bobId);
+      const deliveries = await ctx.db.query("deliveries").collect();
+      expect(deliveries.map((d) => d.recipientKey)).toEqual(["bob@x.com"]);
+      const events = await ctx.db.query("events").collect();
+      expect(events).toHaveLength(1);
+    });
+  });
+
+  it("no-ops on a non-recipient or empty input", async () => {
+    const t = setup();
+    await seedWithDelivery(t, "alice@x.com", "to-alice");
+    await t.mutation(api.lib.purgeRecipient, { email: "nobody@x.com" });
+    await t.mutation(api.lib.purgeRecipient, { email: "   " });
+    const remaining = await t.run((ctx) => ctx.db.query("messages").collect());
+    expect(remaining).toHaveLength(1);
+  });
+});

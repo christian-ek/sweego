@@ -279,6 +279,13 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         },
         Name
       >;
+      purgeRecipient: FunctionReference<
+        "mutation",
+        "internal",
+        { cursor?: string | null; email: string },
+        null,
+        Name
+      >;
       refreshStatus: FunctionReference<
         "action",
         "internal",

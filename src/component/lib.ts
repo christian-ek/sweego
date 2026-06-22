@@ -1033,3 +1033,60 @@ export const cleanupOldEvents = mutation({
     }
   },
 });
+
+/* -------------------------------------------------------------------------- */
+/*  Erasure (GDPR right to be forgotten)                                      */
+/* -------------------------------------------------------------------------- */
+
+const PURGE_SCAN_BATCH = 100;
+
+// True when `email` (already lowercased) is a recipient of `m` — its to/cc/bcc
+// addresses. `from`/`replyTo` are the sender side, not the data subject, so they
+// are intentionally excluded.
+function messageHasRecipient(m: Doc<"messages">, email: string): boolean {
+  return [m.emailRecipients, m.cc, m.bcc].some((list) =>
+    (list ?? []).some((r) => r.email.toLowerCase() === email),
+  );
+}
+
+// Delete every message addressed to `email`, with its deliveries and events.
+// PUBLIC so the host app can run it when it erases a person (GDPR right to
+// erasure): schedule components.sweego.lib.purgeRecipient from your account-
+// deletion mutation. Recipients live in an array, so there is no equality index
+// to seek; we scan creation-time order in batches and self-reschedule via the
+// cursor until the table is exhausted (each batch reads only PURGE_SCAN_BATCH
+// messages, so reads stay bounded). Retention caps the table size and erasure is
+// rare, so the scan stays cheap. Audit-only events with no parent message are
+// not matched here — they carry no recipient address and age out via
+// cleanupOldEvents.
+export const purgeRecipient = mutation({
+  args: {
+    email: v.string(),
+    cursor: v.optional(v.union(v.string(), v.null())),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const email = args.email.trim().toLowerCase();
+    if (email.length === 0) return;
+    const result = await paginator(ctx.db, schema)
+      .query("messages")
+      .withIndex("by_creation_time")
+      .paginate({ numItems: PURGE_SCAN_BATCH, cursor: args.cursor ?? null });
+    let purged = 0;
+    for (const message of result.page) {
+      if (messageHasRecipient(message, email)) {
+        await deleteMessageCascade(ctx, message);
+        purged++;
+      }
+    }
+    if (purged > 0) {
+      console.log(`[sweego] Purged ${purged} message(s) for an erased recipient`);
+    }
+    if (!result.isDone) {
+      await ctx.scheduler.runAfter(0, api.lib.purgeRecipient, {
+        email: args.email,
+        cursor: result.continueCursor,
+      });
+    }
+  },
+});
