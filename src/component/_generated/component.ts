@@ -270,6 +270,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
             errorMessage: string | null;
             messageId: string;
             recipientCount: number;
+            recipients: Array<string>;
             status: "queued" | "sent" | "failed" | "cancelled";
             subject: string | null;
             transactionId: string | null;
@@ -312,6 +313,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
             errorMessage: string | null;
             messageId: string;
             recipientCount: number;
+            recipients: Array<string>;
             status: "queued" | "sent" | "failed" | "cancelled";
             subject: string | null;
             transactionId: string | null;

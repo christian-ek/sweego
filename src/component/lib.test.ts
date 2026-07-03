@@ -228,6 +228,7 @@ describe("list / search / bounds", () => {
     expect(first.isDone).toBe(false);
     expect(first.page[0].subject).toBe("s2"); // newest first
     expect(first.page[0].recipientCount).toBe(1);
+    expect(first.page[0].recipients).toEqual(["u@x.com"]);
 
     const second = await t.query(api.lib.list, {
       paginationOpts: { numItems: 2, cursor: first.continueCursor },

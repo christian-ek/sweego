@@ -489,6 +489,7 @@ const vMessageListItem = v.object({
   status: vSendStatus,
   subject: v.union(v.string(), v.null()),
   recipientCount: v.number(),
+  recipients: v.array(v.string()),
   transactionId: v.union(v.string(), v.null()),
   errorMessage: v.union(v.string(), v.null()),
   campaignTags: v.array(v.string()),
@@ -502,6 +503,10 @@ function messageListItem(m: Doc<"messages">) {
     status: m.status,
     subject: m.subject ?? null,
     recipientCount: m.emailRecipients?.length ?? m.smsRecipients?.length ?? 0,
+    recipients:
+      m.channel === "email"
+        ? (m.emailRecipients ?? []).map((r) => r.email)
+        : (m.smsRecipients ?? []).map((r) => r.num),
     transactionId: m.transactionId ?? null,
     errorMessage: m.errorMessage ?? null,
     campaignTags: m.campaignTags ?? [],
